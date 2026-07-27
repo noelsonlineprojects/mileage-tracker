@@ -231,7 +231,10 @@ export default function Home() {
               </div>
             )}
 
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className={inputClass} />
+            <div>
+  <label className="block text-sm text-slate-600 mb-1">Date</label>
+  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className={inputClass} />
+</div>
 
             <Autocomplete
               onLoad={(ac) => (startAutocompleteRef.current = ac)}
