@@ -27,7 +27,7 @@ export default function Home() {
       .from('trips')
       .select('*')
       .order('date', { ascending: false })
-      .order('created_at', { ascending: false })
+      .order('submitted_at', { ascending: false, nullsFirst: false })
       .order('id', { ascending: true })
     if (error) console.error(error)
     else setTrips(data || [])
@@ -72,28 +72,32 @@ export default function Home() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault()
 
-    const rowsToInsert = [
-      {
-        date,
-        start_address: startAddress,
-        end_address: endAddress,
-        miles: parseFloat(miles),
-        purpose,
-      },
-    ]
+  const submittedAt = new Date().toISOString()
 
-    if (isRoundTrip) {
-      rowsToInsert.push({
-        date,
-        start_address: endAddress,
-        end_address: startAddress,
-        miles: parseFloat(miles),
-        purpose: purpose ? `${purpose} (return)` : 'Return trip',
-      })
-    }
+  const rowsToInsert = [
+    {
+      date,
+      start_address: startAddress,
+      end_address: endAddress,
+      miles: parseFloat(miles),
+      purpose,
+      submitted_at: submittedAt,
+    },
+  ]
+
+  if (isRoundTrip) {
+    rowsToInsert.push({
+      date,
+      start_address: endAddress,
+      end_address: startAddress,
+      miles: parseFloat(miles),
+      purpose: purpose ? `${purpose} (return)` : 'Return trip',
+      submitted_at: submittedAt,
+    })
+  }
 
     const { error } = await supabase.from('trips').insert(rowsToInsert)
 
