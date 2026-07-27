@@ -16,10 +16,10 @@ export const metadata: Metadata = {
   title: "Mileage Tracker",
   description: "Mileage tracker for Re Vera Services",
   manifest: "/manifest.json",
-  icons: {
-    icon: "/logo.png",
-    apple: "/logo.png",
-  },
+icons: {
+  icon: "/icon-512.png",
+  apple: "/icon-512.png",
+},
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
