@@ -27,6 +27,8 @@ export default function Home() {
       .from('trips')
       .select('*')
       .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
     if (error) console.error(error)
     else setTrips(data || [])
   }
