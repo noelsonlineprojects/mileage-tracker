@@ -16,6 +16,10 @@ export default function Home() {
   const [miles, setMiles] = useState('')
   const [purpose, setPurpose] = useState('')
   const [isRoundTrip, setIsRoundTrip] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+
+  const currentMonth = new Date().toISOString().slice(0, 7)
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
 
   const startAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
   const endAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
@@ -80,32 +84,65 @@ export default function Home() {
     }
   }
 
-async function handleSubmit(e: React.FormEvent) {
-  e.preventDefault()
-
-  const submittedAt = new Date().toISOString()
-
-  const rowsToInsert = [
-    {
-      date,
-      start_address: startAddress,
-      end_address: endAddress,
-      miles: parseFloat(miles),
-      purpose,
-      submitted_at: submittedAt,
-    },
-  ]
-
-  if (isRoundTrip) {
-    rowsToInsert.push({
-      date,
-      start_address: endAddress,
-      end_address: startAddress,
-      miles: parseFloat(miles),
-      purpose: purpose ? `${purpose} (return)` : 'Return trip',
-      submitted_at: submittedAt,
-    })
+  function resetForm() {
+    setDate('')
+    setStartAddress(OFFICE_ADDRESS)
+    setEndAddress('')
+    setMiles('')
+    setPurpose('')
+    setIsRoundTrip(false)
+    setEditingId(null)
   }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+
+    if (editingId !== null) {
+      // Editing an existing single trip
+      const { error } = await supabase
+        .from('trips')
+        .update({
+          date,
+          start_address: startAddress,
+          end_address: endAddress,
+          miles: parseFloat(miles),
+          purpose,
+        })
+        .eq('id', editingId)
+
+      if (error) {
+        console.error(error)
+        alert('Error updating trip')
+      } else {
+        resetForm()
+        fetchTrips()
+      }
+      return
+    }
+
+    const submittedAt = new Date().toISOString()
+
+    const rowsToInsert = [
+      {
+        date,
+        start_address: startAddress,
+        end_address: endAddress,
+        miles: parseFloat(miles),
+        purpose,
+        submitted_at: submittedAt,
+      },
+    ]
+
+    if (isRoundTrip) {
+      rowsToInsert.push({
+        date,
+        start_address: endAddress,
+        end_address: startAddress,
+        miles: parseFloat(miles),
+        purpose: purpose ? `${purpose} (return)` : 'Return trip',
+        submitted_at: submittedAt,
+      })
+    }
 
     const { error } = await supabase.from('trips').insert(rowsToInsert)
 
@@ -113,19 +150,43 @@ async function handleSubmit(e: React.FormEvent) {
       console.error(error)
       alert('Error saving trip')
     } else {
-      setDate('')
-      setStartAddress('')
-      setEndAddress('')
-      setMiles('')
-      setPurpose('')
-      setIsRoundTrip(false)
+      resetForm()
       fetchTrips()
     }
   }
 
+  function startEdit(trip: any) {
+    setEditingId(trip.id)
+    setDate(trip.date)
+    setStartAddress(trip.start_address)
+    setEndAddress(trip.end_address)
+    setMiles(String(trip.miles))
+    setPurpose(trip.purpose || '')
+    setIsRoundTrip(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function deleteTrip(id: number) {
+    const confirmed = window.confirm('Delete this trip? This cannot be undone.')
+    if (!confirmed) return
+
+    const { error } = await supabase.from('trips').delete().eq('id', id)
+    if (error) {
+      console.error(error)
+      alert('Error deleting trip')
+    } else {
+      fetchTrips()
+    }
+  }
+
+  function getFilteredTrips() {
+    return trips.filter((t) => t.date?.startsWith(selectedMonth))
+  }
+
   function exportCSV() {
+    const filtered = getFilteredTrips()
     const headers = ['Date', 'From', 'To', 'Miles', 'Purpose']
-    const rows = trips.map((t) => [t.date, t.start_address, t.end_address, t.miles, t.purpose || ''])
+    const rows = filtered.map((t) => [t.date, t.start_address, t.end_address, t.miles, t.purpose || ''])
     const csvContent = [headers, ...rows]
       .map((row) => row.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(','))
       .join('\n')
@@ -134,7 +195,7 @@ async function handleSubmit(e: React.FormEvent) {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `mileage-report-${new Date().toISOString().slice(0, 10)}.csv`
+    link.download = `mileage-report-${selectedMonth}.csv`
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -148,6 +209,12 @@ async function handleSubmit(e: React.FormEvent) {
         <h1>Mileage Tracker</h1>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
+          {editingId !== null && (
+            <div style={{ background: '#fffbe6', padding: 8, borderRadius: 4 }}>
+              Editing trip — <button type="button" onClick={resetForm}>Cancel</button>
+            </div>
+          )}
+
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
 
           <Autocomplete
@@ -177,39 +244,48 @@ async function handleSubmit(e: React.FormEvent) {
           </Autocomplete>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {getRecentPlaces().map((place) => (
-    <button
-      key={place}
-      type="button"
-      onClick={() => {
-  setEndAddress(place)
-  calculateDistance(startAddress, place)
-}}
-      style={{ fontSize: 12, padding: '4px 8px' }}
-    >
-      {place.split(',')[0]}
-    </button>
-  ))}
-</div>
+            {getRecentPlaces().map((place) => (
+              <button
+                key={place}
+                type="button"
+                onClick={() => {
+                  setEndAddress(place)
+                  calculateDistance(startAddress, place)
+                }}
+                style={{ fontSize: 12, padding: '4px 8px' }}
+              >
+                {place.split(',')[0]}
+              </button>
+            ))}
+          </div>
 
           <input type="number" step="0.1" placeholder="Miles" value={miles} onChange={(e) => setMiles(e.target.value)} required />
           <input type="text" placeholder="Purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={isRoundTrip}
-              onChange={(e) => setIsRoundTrip(e.target.checked)}
-            />
-            Return to start address? (logs the trip back too, same mileage)
-          </label>
+          {editingId === null && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={isRoundTrip}
+                onChange={(e) => setIsRoundTrip(e.target.checked)}
+              />
+              Return to start address? (logs the trip back too, same mileage)
+            </label>
+          )}
 
-          <button type="submit">Add Trip</button>
+          <button type="submit">{editingId !== null ? 'Save Changes' : 'Add Trip'}</button>
         </form>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
           <h2>Trips</h2>
-          <button onClick={exportCSV} type="button">Export CSV</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            />
+            <button onClick={exportCSV} type="button">Export CSV</button>
+          </div>
         </div>
 
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -220,6 +296,7 @@ async function handleSubmit(e: React.FormEvent) {
               <th style={{ textAlign: 'left' }}>To</th>
               <th style={{ textAlign: 'left' }}>Miles</th>
               <th style={{ textAlign: 'left' }}>Purpose</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -230,6 +307,10 @@ async function handleSubmit(e: React.FormEvent) {
                 <td>{trip.end_address}</td>
                 <td>{trip.miles}</td>
                 <td>{trip.purpose}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <button type="button" onClick={() => startEdit(trip)} style={{ fontSize: 12, marginRight: 4 }}>Edit</button>
+                  <button type="button" onClick={() => deleteTrip(trip.id)} style={{ fontSize: 12 }}>Delete</button>
+                </td>
               </tr>
             ))}
           </tbody>
