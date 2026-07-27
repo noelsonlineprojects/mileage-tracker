@@ -6,10 +6,12 @@ import { LoadScript, Autocomplete } from '@react-google-maps/api'
 
 const libraries: ('places')[] = ['places']
 
+const OFFICE_ADDRESS = '2004 W Garden St, Pensacola, FL 32502, USA'
+
 export default function Home() {
   const [trips, setTrips] = useState<any[]>([])
   const [date, setDate] = useState('')
-  const [startAddress, setStartAddress] = useState('')
+  const [startAddress, setStartAddress] = useState(OFFICE_ADDRESS)
   const [endAddress, setEndAddress] = useState('')
   const [miles, setMiles] = useState('')
   const [purpose, setPurpose] = useState('')
@@ -31,6 +33,12 @@ export default function Home() {
       .order('id', { ascending: true })
     if (error) console.error(error)
     else setTrips(data || [])
+  }
+
+  function getRecentPlaces() {
+    const addresses = trips.flatMap((t) => [t.start_address, t.end_address])
+    const unique = Array.from(new Set(addresses)).filter((a) => a && a !== OFFICE_ADDRESS)
+    return unique.slice(0, 5)
   }
 
   function calculateDistance(origin: string, destination: string) {
@@ -167,6 +175,22 @@ async function handleSubmit(e: React.FormEvent) {
               required
             />
           </Autocomplete>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {getRecentPlaces().map((place) => (
+    <button
+      key={place}
+      type="button"
+      onClick={() => {
+  setEndAddress(place)
+  calculateDistance(startAddress, place)
+}}
+      style={{ fontSize: 12, padding: '4px 8px' }}
+    >
+      {place.split(',')[0]}
+    </button>
+  ))}
+</div>
 
           <input type="number" step="0.1" placeholder="Miles" value={miles} onChange={(e) => setMiles(e.target.value)} required />
           <input type="text" placeholder="Purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
