@@ -13,6 +13,7 @@ export default function Home() {
   const [endAddress, setEndAddress] = useState('')
   const [miles, setMiles] = useState('')
   const [purpose, setPurpose] = useState('')
+  const [isRoundTrip, setIsRoundTrip] = useState(false)
 
   const startAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
   const endAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
@@ -71,7 +72,8 @@ export default function Home() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const { error } = await supabase.from('trips').insert([
+
+    const rowsToInsert = [
       {
         date,
         start_address: startAddress,
@@ -79,7 +81,20 @@ export default function Home() {
         miles: parseFloat(miles),
         purpose,
       },
-    ])
+    ]
+
+    if (isRoundTrip) {
+      rowsToInsert.push({
+        date,
+        start_address: endAddress,
+        end_address: startAddress,
+        miles: parseFloat(miles),
+        purpose: purpose ? `${purpose} (return)` : 'Return trip',
+      })
+    }
+
+    const { error } = await supabase.from('trips').insert(rowsToInsert)
+
     if (error) {
       console.error(error)
       alert('Error saving trip')
@@ -89,8 +104,25 @@ export default function Home() {
       setEndAddress('')
       setMiles('')
       setPurpose('')
+      setIsRoundTrip(false)
       fetchTrips()
     }
+  }
+
+  function exportCSV() {
+    const headers = ['Date', 'From', 'To', 'Miles', 'Purpose']
+    const rows = trips.map((t) => [t.date, t.start_address, t.end_address, t.miles, t.purpose || ''])
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `mileage-report-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -132,10 +164,24 @@ export default function Home() {
 
           <input type="number" step="0.1" placeholder="Miles" value={miles} onChange={(e) => setMiles(e.target.value)} required />
           <input type="text" placeholder="Purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={isRoundTrip}
+              onChange={(e) => setIsRoundTrip(e.target.checked)}
+            />
+            Return to start address? (logs the trip back too, same mileage)
+          </label>
+
           <button type="submit">Add Trip</button>
         </form>
 
-        <h2>Trips</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h2>Trips</h2>
+          <button onClick={exportCSV} type="button">Export CSV</button>
+        </div>
+
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
