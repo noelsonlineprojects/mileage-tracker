@@ -1,0 +1,21 @@
+{
+  "name": "Mileage Tracker - Re Vera Services",
+  "short_name": "Mileage",
+  "description": "Mileage tracker for Re Vera Services",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8F7FC",
+  "theme_color": "#4C1D95",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
